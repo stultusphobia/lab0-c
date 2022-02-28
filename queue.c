@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,11 +18,36 @@
  */
 struct list_head *q_new()
 {
-    return NULL;
+    struct list_head *new = malloc(sizeof(struct list_head));
+
+    /* According to malloc(size_t size):
+     * If the function failed to allocate the
+     * requested block of memory, a null pointer is returned.
+     */
+    if (new == NULL)
+        return NULL;
+
+    /* Macro defined in list.h */
+    INIT_LIST_HEAD(new);
+    return new;
 }
 
 /* Free all storage used by queue */
-void q_free(struct list_head *l) {}
+void q_free(struct list_head *l)
+{
+    element_t *entry = NULL, *safe = NULL;
+
+    /* Macro defined in list.h,
+     * iterate over list entries and allow deletes
+     * delete all elements
+     */
+    list_for_each_entry_safe (entry, safe, l, list) {
+        list_del(&entry->list);
+        free(entry);
+    }
+
+    free(l);
+}
 
 /*
  * Attempt to insert element at head of queue.
@@ -32,6 +58,23 @@ void q_free(struct list_head *l) {}
  */
 bool q_insert_head(struct list_head *head, char *s)
 {
+    if (head == NULL)
+        return false;
+
+    element_t *new = malloc(sizeof(element_t));
+    if (new == NULL)
+        return false;
+
+    new->value = strdup(s);
+    if (new->value == NULL) {
+        /* If space of string cannot be allocated, free the node. */
+        free(new);
+        return false;
+    }
+
+    /* Defined in list.h */
+    list_add(&new->list, head);
+
     return true;
 }
 
@@ -63,7 +106,17 @@ bool q_insert_tail(struct list_head *head, char *s)
  */
 element_t *q_remove_head(struct list_head *head, char *sp, size_t bufsize)
 {
-    return NULL;
+    if (head == NULL || list_empty(head))
+        return NULL;
+
+    element_t *rm = list_first_entry(head, element_t, list);
+
+    strncpy(sp, rm->value, bufsize - 1);
+
+    *(sp + bufsize - 1) = '\0';
+
+    list_del(&rm->list);
+    return rm;
 }
 
 /*
