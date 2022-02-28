@@ -87,6 +87,23 @@ bool q_insert_head(struct list_head *head, char *s)
  */
 bool q_insert_tail(struct list_head *head, char *s)
 {
+    if (head == NULL)
+        return false;
+
+    element_t *new = malloc(sizeof(element_t));
+    if (new == NULL)
+        return false;
+
+    new->value = strdup(s);
+    if (new->value == NULL) {
+        /* If space of string cannot be allocated, free the node. */
+        free(new);
+        return false;
+    }
+
+    /* Defined in list.h */
+    list_add_tail(&new->list, head);
+
     return true;
 }
 
@@ -125,7 +142,17 @@ element_t *q_remove_head(struct list_head *head, char *sp, size_t bufsize)
  */
 element_t *q_remove_tail(struct list_head *head, char *sp, size_t bufsize)
 {
-    return NULL;
+    if (head == NULL || list_empty(head))
+        return NULL;
+
+    element_t *rm = list_last_entry(head, element_t, list);
+
+    strncpy(sp, rm->value, bufsize - 1);
+
+    *(sp + bufsize - 1) = '\0';
+
+    list_del(&rm->list);
+    return rm;
 }
 
 /*
@@ -158,6 +185,29 @@ int q_size(struct list_head *head)
 bool q_delete_mid(struct list_head *head)
 {
     // https://leetcode.com/problems/delete-the-middle-node-of-a-linked-list/
+
+    /* No effect if q is NULL or empty or only contains one element. */
+    if (head == NULL || list_empty(head) || list_is_singular(head))
+        return false;
+
+    /* Fast pointer moves double the speed of slow pointer,
+     * when fast pointer reaches the end (head or head->next),
+     * slow pointer will be at the middle of the list.
+     * (Floyd’s Cycle detection)
+     */
+    struct list_head *slow = head->next, *fast = head->next->next;
+
+    while (fast != head && fast != head->next) {
+        slow = slow->next;
+        fast = fast->next->next;
+    }
+
+    list_del(slow);
+    /* free(list_entry(slow, element_t, list)); does not work!
+     * Need to free value (*char) in element_t, too.
+     */
+    q_release_element(list_entry(slow, element_t, list));
+
     return true;
 }
 
@@ -191,7 +241,20 @@ void q_swap(struct list_head *head)
  * (e.g., by calling q_insert_head, q_insert_tail, or q_remove_head).
  * It should rearrange the existing ones.
  */
-void q_reverse(struct list_head *head) {}
+void q_reverse(struct list_head *head)
+{
+    /* No effect if q is NULL or empty or only contains one element. */
+    if (head == NULL || list_empty(head) || list_is_singular(head))
+        return;
+
+    struct list_head *node = head, *buff = NULL;
+    do {
+        buff = node->next;
+        node->next = node->prev;
+        node->prev = buff;
+        node = buff;
+    } while (node != head);
+}
 
 /*
  * Sort elements of queue in ascending order
