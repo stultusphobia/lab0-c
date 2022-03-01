@@ -12,6 +12,10 @@
  *   cppcheck-suppress nullPointer
  */
 
+/* Type define for elements comparison function in merge_sort */
+typedef int (*list_cmp_func_t)(const struct list_head *,
+                               const struct list_head *);
+
 /*
  * Create empty queue.
  * Return NULL if could not allocate space.
@@ -171,7 +175,15 @@ void q_release_element(element_t *e)
  */
 int q_size(struct list_head *head)
 {
-    return -1;
+    if (head == NULL || list_empty(head))
+        return 0;
+
+    struct list_head *node = NULL;
+    size_t length = 0;
+    list_for_each (node, head)
+        length++;
+
+    return length;
 }
 
 /*
@@ -232,6 +244,12 @@ bool q_delete_dup(struct list_head *head)
 void q_swap(struct list_head *head)
 {
     // https://leetcode.com/problems/swap-nodes-in-pairs/
+    if (head == NULL || list_empty(head) || list_is_singular(head))
+        return;
+
+    for (struct list_head *node = head->next;
+         node != head && node->next != head; node = node->next)
+        list_move_tail(node->next, node);
 }
 
 /*
@@ -256,9 +274,108 @@ void q_reverse(struct list_head *head)
     } while (node != head);
 }
 
+/**
+ * @brief Elements comparison function for element_t.
+ * @param a pointer to list node a
+ * @param b pointer to list node b
+ * @return int > 0 if the first non-matching character in a is
+ * greater (in ASCII) than that of b, vice versa.
+ */
+static inline int element_t_cmp(const struct list_head *a,
+                                const struct list_head *b)
+{
+    return strcmp(list_entry(a, element_t, list)->value,
+                  list_entry(b, element_t, list)->value);
+}
+
+/**
+ * merge() - Returns a list organized in an intermediate format suited
+ * to chaining of merge() calls: null-terminated, no reserved or
+ * sentinel head node, "prev" links not maintained. Helper function
+ * for merge_sort().
+ */
+static struct list_head *merge(list_cmp_func_t cmp,
+                               struct list_head *a,
+                               struct list_head *b)
+{
+    struct list_head *head = NULL, **tail = &head;
+
+    while (1) {
+        if (cmp(a, b) <= 0) {
+            *tail = a;
+            tail = &(*tail)->next;
+            a = a->next;
+            if (a == NULL) {
+                *tail = b;
+                break;
+            }
+        } else {
+            *tail = b;
+            tail = &(*tail)->next;
+            b = b->next;
+            if (b == NULL) {
+                *tail = a;
+                break;
+            }
+        }
+    }
+
+    return head;
+}
+
+/**
+ * reconnect() - Reconstruct "prev" links after the list is sorted. Helper
+ * function for merge_sort().
+ */
+static void reconnect(struct list_head *head)
+{
+    struct list_head *node = head;
+    do {
+        node->next->prev = node;
+        node = node->next;
+    } while (node->next != NULL);
+
+    node->next = head;
+    head->prev = node;
+}
+
+/**
+ * merge_sort() - Recursive merge sort
+ * @head: pointer to the head of the list
+ * @cmp: the elements comparison function
+ * The comparison function @cmp must return > 0 if @a should sort after
+ * @b ("@a > @b" if you want an ascending sort), and <= 0 if @a should
+ * sort before @b *or* their original order should be preserved.
+ */
+static struct list_head *merge_sort(struct list_head *head, list_cmp_func_t cmp)
+{
+    if (head->next == NULL)
+        return head;
+
+    struct list_head *slow = head->next, *fast = head->next->next;
+
+    while (fast != NULL && fast->next != NULL) {
+        slow = slow->next;
+        fast = fast->next->next;
+    }
+
+    slow->prev->next = NULL;
+
+    return merge(cmp, merge_sort(head, cmp), merge_sort(slow, cmp));
+}
+
 /*
  * Sort elements of queue in ascending order
  * No effect if q is NULL or empty. In addition, if q has only one
  * element, do nothing.
  */
-void q_sort(struct list_head *head) {}
+void q_sort(struct list_head *head)
+{
+    if (head == NULL || list_empty(head) || list_is_singular(head))
+        return;
+
+    head->prev->next = NULL;
+
+    head->next = merge_sort(head->next, element_t_cmp);
+    reconnect(head);
+}
